@@ -12,5 +12,3 @@ jobs:
     name: Flowzone
     uses: product-os/flowzone/.github/workflows/flowzone.yml@master
     secrets: inherit
-    with:
-      balena_slugs: balenalabs/autohupr-amd64, balenalabs/autohupr-aarch64, balenalabs/autohupr-armv7hf

@@ -1,5 +1,7 @@
-import { getSdk, OptionalNavigationResource } from 'balena-sdk';
-import ms, { StringValue } from 'ms';
+import type { OptionalNavigationResource } from 'balena-sdk';
+import { getSdk } from 'balena-sdk';
+import type { StringValue } from 'ms';
+import ms from 'ms';
 
 const apiKey = (process.env.BALENA_API_KEY as unknown as string) ?? undefined;
 const apiUrl = (process.env.BALENA_API_URL as unknown as string) ?? undefined;
@@ -10,7 +12,7 @@ const checkInterval =
 	(process.env.HUP_CHECK_INTERVAL as unknown as StringValue) || '1d';
 
 const userTargetVersion =
-	(process.env.HUP_TARGET_VERSION as unknown as StringValue) || '';
+	(process.env.HUP_TARGET_VERSION as unknown as string) || '';
 
 if (!apiKey) {
 	console.error('BALENA_API_KEY required in environment');
@@ -33,28 +35,24 @@ const balena = getSdk({
 });
 
 const delay = (value: StringValue) => {
-	try {
-		return new Promise((resolve) => setTimeout(resolve, ms(value)));
-	} catch (e) {
-		throw e;
-	}
+	return new Promise((resolve) => setTimeout(resolve, ms(value)));
 };
 
-const getExpandedProp = <T, K extends keyof T>(
+const getExpandedProp = <T extends object, K extends keyof T>(
 	obj: OptionalNavigationResource<T>,
 	key: K,
-) => (Array.isArray(obj) && obj[0] && obj[0][key]) || undefined;
+) => (Array.isArray(obj) && obj[0] && obj[0][key]) ?? undefined;
 
 const getDeviceType = async (uuid: string): Promise<string> => {
 	return await balena.models.device
 		.get(uuid, { $expand: { is_of__device_type: { $select: 'slug' } } })
-		.then(async (device) => {
+		.then((device) => {
 			return getExpandedProp(device.is_of__device_type, 'slug') as string;
 		});
 };
 
 const getDeviceVersion = async (uuid: string): Promise<string> => {
-	return await balena.models.device.get(uuid).then(async (device) => {
+	return await balena.models.device.get(uuid).then((device) => {
 		return balena.models.device.getOsVersion(device);
 	});
 };
@@ -73,12 +71,12 @@ const getTargetVersion = async (
 				return null;
 			} else {
 				if (['recommended', 'latest'].includes(userTargetVersion)) {
-					return osUpdateVersions.recommended as string;
+					return osUpdateVersions.recommended!;
 				} else {
 					return (
 						(osUpdateVersions.versions.find((version: string) =>
 							version.includes(userTargetVersion),
-						) as string) || null
+						)!) || null
 					);
 				}
 			}
@@ -98,11 +96,7 @@ const getUpdateStatus = async (uuid: string): Promise<any> => {
 
 const main = async () => {
 	while (true) {
-		try {
-			await balena.auth.loginWithToken(apiKey);
-		} catch (e) {
-			throw e;
-		}
+		await balena.auth.loginWithToken(apiKey);
 
 		while (!(await balena.models.device.isOnline(deviceUuid))) {
 			console.log('Device is offline...');
@@ -157,4 +151,6 @@ const main = async () => {
 };
 
 console.log('Starting up...');
-main();
+main().catch((e) => {
+  console.error(e);
+});

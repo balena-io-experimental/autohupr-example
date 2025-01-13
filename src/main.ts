@@ -3,6 +3,17 @@ import { getSdk } from 'balena-sdk';
 import type { StringValue } from 'ms';
 import ms from 'ms';
 
+/** Functional state of HUP on device for our purposes. */
+enum HupStatus {
+	RUNNING,
+	FAILED,
+	NOT_RUNNING,
+	/** Do not anticipate a device in this state; future proofing. */
+	DEVICE_BUSY,
+	/** For example, can't determine status if can't reach API. */
+	UNKNOWN,
+}
+
 const apiKey = (process.env.BALENA_API_KEY as unknown as string) ?? undefined;
 const apiUrl = (process.env.BALENA_API_URL as unknown as string) ?? undefined;
 const deviceUuid =
@@ -74,27 +85,46 @@ const getTargetVersion = async (
 					return osUpdateVersions.recommended!;
 				} else {
 					return (
-						(osUpdateVersions.versions.find((version: string) =>
+						osUpdateVersions.versions.find((version: string) =>
 							version.includes(userTargetVersion),
-						)!) || null
+						)! || null
 					);
 				}
 			}
 		});
 };
 
-const getUpdateStatus = async (uuid: string): Promise<any> => {
+/** Retrieve device model for status of HUP properties. */
+const getUpdateStatus = async (uuid: string): Promise<HupStatus> => {
 	try {
-		const hupStatus = await balena.models.device.getOsUpdateStatus(uuid);
-		console.log(hupStatus);
-		return hupStatus;
+		const hupProps = await balena.models.device.get(uuid, {
+			$select: ['status', 'provisioning_state', 'provisioning_progress'],
+		});
+		console.log(`Device HUP status: ${JSON.stringify(hupProps)}`);
+
+		if (hupProps.status.toLowerCase() === 'configuring') {
+			if (hupProps.provisioning_state === 'OS update failed') {
+				return HupStatus.FAILED;
+			} else {
+				return HupStatus.RUNNING;
+			}
+		} else if (hupProps.status.toLowerCase() === 'idle') {
+			return HupStatus.NOT_RUNNING;
+		} else {
+			return HupStatus.DEVICE_BUSY;
+		}
 	} catch (e) {
 		console.error(`Error getting status: ${e}`);
-		return false;
+		return HupStatus.UNKNOWN;
 	}
 };
 
 const main = async () => {
+	const delayStates = [
+		HupStatus.UNKNOWN,
+		HupStatus.RUNNING,
+		HupStatus.DEVICE_BUSY,
+	];
 	while (true) {
 		await balena.auth.loginWithToken(apiKey);
 
@@ -105,11 +135,11 @@ const main = async () => {
 
 		console.log('Checking last update status...');
 		while (
-			await getUpdateStatus(deviceUuid).then((status) => {
-				return !status || status.status === 'in_progress';
-			})
+			await getUpdateStatus(deviceUuid).then((status) =>
+				delayStates.includes(status),
+			)
 		) {
-			console.log('Another update is already in progress...');
+			console.log('Another update may be in progress...');
 			await delay('2m');
 		}
 
@@ -127,16 +157,20 @@ const main = async () => {
 		} else {
 			console.log(`Starting balenaOS host update to ${targetVersion}...`);
 			await balena.models.device
-				.startOsUpdate(deviceUuid, targetVersion)
+				.startOsUpdate(deviceUuid, targetVersion, { runDetached: true })
 				.then(async () => {
+					// Allow time for server to start HUP on device, which then
+					// sets Configuring status.
+					await delay('20s');
 					while (
-						// print progress at regular intervals until status changes
-						// or device reboots
-						await getUpdateStatus(deviceUuid).then((status) => {
-							return !status || status.status === 'in_progress';
-						})
+						// Print progress at regular intervals while API indicates
+						// HUP still may be running.
+						await getUpdateStatus(deviceUuid).then(
+							(status) =>
+								status === HupStatus.UNKNOWN || status === HupStatus.RUNNING,
+						)
 					) {
-						await delay('10s');
+						await delay('20s');
 					}
 				})
 				.catch((e) => {
@@ -152,5 +186,5 @@ const main = async () => {
 
 console.log('Starting up...');
 main().catch((e) => {
-  console.error(e);
+	console.error(e);
 });

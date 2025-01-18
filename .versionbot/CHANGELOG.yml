@@ -1,4 +1,26 @@
 - commits:
+    - subject: Use HUP detached mode for improved resilience with an unreliable network
+      hash: c3189a70455e66a3db8596937756bdd74bf87665
+      body: ""
+      footer:
+        Change-type: patch
+        change-type: patch
+        Signed-off-by: Ken Bannister <kb2ma@runbox.com>
+        signed-off-by: Ken Bannister <kb2ma@runbox.com>
+      author: Ken Bannister
+    - subject: Update configuration and dependencies; implement lint fixes
+      hash: 9fce1c9402e74499b2230db10efad20001f87391
+      body: ""
+      footer:
+        Change-type: patch
+        change-type: patch
+        Signed-off-by: Ken Bannister <kb2ma@runbox.com>
+        signed-off-by: Ken Bannister <kb2ma@runbox.com>
+      author: Ken Bannister
+  version: 0.1.5
+  title: ""
+  date: 2025-01-18T15:32:11.851Z
+- commits:
     - subject: Allow user to set target version
       hash: 510a52db1468881c10f0d28f064f4a0f150697a3
       body: ""

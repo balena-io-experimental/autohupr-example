@@ -7,9 +7,10 @@
 		"removeComments": true,
 		"sourceMap": true,
 		"strict": true,
-		"target": "es2015",
+		"target": "es2022",
 		"declaration": true,
 		"skipLibCheck": true,
+		"strictNullChecks": true,
 	},
 	"include": [
 		"src/**/*.ts"
